@@ -1,0 +1,12 @@
+# Node & Frontend
+node_modules/
+dist/
+
+# Python & Backend
+venv/
+env/
+__pycache__/
+
+# Database & Secrets
+chroma_data/
+.env
