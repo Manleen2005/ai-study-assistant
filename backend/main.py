@@ -21,7 +21,8 @@ app = FastAPI(title="AI Study Assistant API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # In production, restrict this to your frontend URL
+    allow_origins=["*"],  # The "*" means allow requests from any URL!
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
