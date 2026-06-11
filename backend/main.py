@@ -5,9 +5,15 @@ import PyPDF2
 import io
 import chromadb
 import os
+import shutil
 import google.generativeai as genai
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
+
+# --- NEW CELERY IMPORTS ---
+from celery.result import AsyncResult
+from celery_app import celery_app
+from tasks import process_study_pdf
 
 # Load environment variables
 load_dotenv()
@@ -26,6 +32,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- NEW: SETUP TEMPORARY UPLOAD FOLDER FOR CELERY ---
+UPLOAD_DIR = "temp_uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # Initialize ChromaDB
 chroma_client = chromadb.PersistentClient(path="./chroma_data")
@@ -53,9 +63,8 @@ class QueryRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     question: str
-    filename: str = None
-    history: list = []  # <--- Memory Array
-
+    filename: Optional[str] = None
+    history: list = []
 # --- CORE LOGIC ---
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
@@ -78,6 +87,51 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 100) -> list:
 
 # --- API ENDPOINTS ---
 
+# 1. NEW CELERY ASYNC ENDPOINT
+@app.post("/api/upload-async")
+async def upload_document_async(file: UploadFile = File(...)):
+    """
+    Receives the PDF, saves it temporarily, and dispatches to Celery queue.
+    """
+    if not file.filename.endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+        
+    # Save the file to our local disk so the Celery worker can access it
+    file_path = os.path.join(UPLOAD_DIR, file.filename)
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    # Dispatch to background worker
+    task = process_study_pdf.delay(file_path)
+    
+    # Instantly return task receipt
+    return {
+        "message": "File received! Processing in the background.",
+        "task_id": task.id,
+        "filename": file.filename
+    }
+
+# 2. NEW CELERY STATUS ENDPOINT
+@app.get("/api/task-status/{task_id}")
+async def get_task_status(task_id: str):
+    """
+    Frontend checks this endpoint to see if the background task is done.
+    """
+    task_result = AsyncResult(task_id, app=celery_app)
+    
+    response = {
+        "task_id": task_id,
+        "status": task_result.status,
+    }
+    
+    if task_result.status == "SUCCESS":
+        response["result"] = task_result.result
+    elif task_result.status == "PROCESSING":
+        response["progress"] = task_result.info 
+        
+    return response
+
+# 3. EXISTING SYNC ENDPOINT (Kept intact for safety)
 @app.post("/api/upload")
 async def upload_document(file: UploadFile = File(...)):
     if not file.filename.endswith('.pdf'):
@@ -114,7 +168,7 @@ async def upload_document(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error indexing file: {str(e)}")
 
-
+# 4. EXISTING CHAT ENDPOINT
 @app.post("/api/chat")
 async def chat_with_document(request: ChatRequest):
     """Retrieves context, optionally filtering by filename, and queries Gemini with Conversation History."""
