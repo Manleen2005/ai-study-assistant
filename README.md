@@ -1,6 +1,7 @@
 # AI Study Assistant - Full-Stack RAG Web Application
 
 An advanced, full-stack Artificial Intelligence web application designed to process PDF documents and autonomously generate interactive study materials, quizzes, and flashcards using a Retrieval-Augmented Generation (RAG) architecture[cite: 1].
+**🔴 Live Demo:** [Click here to try the application!](https://ai-study-assistant-roan.vercel.app)
 
 ## 🚀 Key Features
 
