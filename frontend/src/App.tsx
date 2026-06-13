@@ -56,7 +56,7 @@ function App() {
 
     const fetchChats = async () => {
       const supabase = await getSupabase();
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('chats')
         .select('*')
         .order('created_at', { ascending: false });
@@ -94,7 +94,7 @@ function App() {
     const supabase = await getSupabase();
     
     // Create the chat in Supabase first to get the real Database ID
-    const { data, error } = await supabase.from('chats').insert([{
+    const { data } = await supabase.from('chats').insert([{
       user_id: userId,
       title: "New Conversation",
       messages: [{ role: 'ai', content: 'Hello! You can upload a PDF to begin studying.' }],
